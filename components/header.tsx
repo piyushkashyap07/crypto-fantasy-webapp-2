@@ -1,10 +1,18 @@
 "use client"
 
-import { User } from "lucide-react"
+import { useState } from "react"
+import { User, Search } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import UserRecoveryModal from "./user-recovery-modal"
 
 export default function Header() {
   const { userUID, loading } = useAuth()
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false)
+
+  const handleRecoverySuccess = () => {
+    // Refresh the page to update the user ID
+    window.location.reload()
+  }
 
   return (
     <>
@@ -20,17 +28,31 @@ export default function Header() {
 
             <div className="flex items-center space-x-4">
               {!loading && (
-                <div className="flex items-center space-x-2">
-                  <User className="w-4 h-4" />
-                  <span className="text-sm font-mono">@{userUID}</span>
-                </div>
+                <>
+                  <div className="flex items-center space-x-2">
+                    <User className="w-4 h-4" />
+                    <span className="text-sm font-mono">@{userUID}</span>
+                  </div>
+                  <button
+                    onClick={() => setShowRecoveryModal(true)}
+                    className="text-white hover:text-gray-200 transition-colors p-2"
+                    title="Recover Account"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
+                </>
               )}
             </div>
           </div>
         </div>
       </header>
 
-
+      {showRecoveryModal && (
+        <UserRecoveryModal
+          onClose={() => setShowRecoveryModal(false)}
+          onRecoverySuccess={handleRecoverySuccess}
+        />
+      )}
     </>
   )
 }
