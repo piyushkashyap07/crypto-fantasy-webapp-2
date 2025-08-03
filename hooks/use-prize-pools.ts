@@ -89,6 +89,7 @@ export function usePrizePools() {
                       return prev
                     }
                     const newPools = [payload.new, ...prev]
+                    console.log("Updated prize pools list:", newPools.length, "pools")
                     return newPools
                   })
                   showNotification(payload.new)

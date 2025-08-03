@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, Wallet, Users } from "lucide-react"
-import { deletePrizePool } from "@/lib/prize-pools"
+import { Trash2, Wallet, Users, Edit, Eye, Users as UsersIcon } from "lucide-react"
+import { deletePrizePool, updatePrizePool } from "@/lib/admin-auth"
 import EditRecipientModal from "./edit-recipient-modal"
 import AdminParticipantsModal from "./admin-participants-modal"
+import EditPrizePoolModal from "./edit-prize-pool-modal"
 
 interface AdminPrizePoolTabsProps {
   activeTab: string
@@ -23,6 +24,7 @@ export default function AdminPrizePoolTabs({
 }: AdminPrizePoolTabsProps) {
   const [showEditRecipient, setShowEditRecipient] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
+  const [showEditPrizePool, setShowEditPrizePool] = useState(false)
   const [selectedPool, setSelectedPool] = useState<any>(null)
 
   const upcomingPools = prizePools.filter((pool) => pool.status === "upcoming")
@@ -73,6 +75,11 @@ export default function AdminPrizePoolTabs({
     setShowParticipants(true)
   }
 
+  const handleEditPrizePool = (pool: any) => {
+    setSelectedPool(pool)
+    setShowEditPrizePool(true)
+  }
+
   const getCurrentPools = () => {
     switch (activeTab) {
       case "upcoming":
@@ -117,7 +124,14 @@ export default function AdminPrizePoolTabs({
               className="text-blue-600 hover:text-blue-700 transition-colors p-2 hover:bg-blue-50 rounded"
               title="View Participants"
             >
-              <Users className="w-5 h-5" />
+              <UsersIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => handleEditPrizePool(pool)}
+              className="text-orange-600 hover:text-orange-700 transition-colors p-2 hover:bg-orange-50 rounded"
+              title="Edit Prize Pool"
+            >
+              <Edit className="w-5 h-5" />
             </button>
             <button
               onClick={() => handleEditRecipient(pool)}
@@ -231,7 +245,19 @@ export default function AdminPrizePoolTabs({
       )}
 
       {showParticipants && selectedPool && (
-        <AdminParticipantsModal onClose={() => setShowParticipants(false)} prizePool={selectedPool} />
+        <AdminParticipantsModal 
+          onClose={() => setShowParticipants(false)} 
+          prizePoolId={selectedPool.id}
+          prizePoolName={selectedPool.name}
+        />
+      )}
+
+      {showEditPrizePool && selectedPool && (
+        <EditPrizePoolModal
+          prizePool={selectedPool}
+          onClose={() => setShowEditPrizePool(false)}
+          onUpdate={onUpdate}
+        />
       )}
     </>
   )

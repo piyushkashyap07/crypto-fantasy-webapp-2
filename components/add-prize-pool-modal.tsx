@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { X, Plus, Minus } from "lucide-react"
-import { createPrizePool } from "@/lib/supabase"
+import { createPrizePool } from "@/lib/admin-auth"
 
 interface PrizeDistribution {
   rankFrom: number
@@ -104,6 +104,9 @@ export default function AddPrizePoolModal({ onClose }: AddPrizePoolModalProps) {
       await createPrizePool(prizePoolData)
       alert("Prize pool created successfully!")
       onClose()
+      
+      // Trigger a page refresh to show the new pool
+      window.location.reload()
     } catch (error: any) {
       console.error("Error creating prize pool:", error)
       alert(`Error: ${error.message}`)
