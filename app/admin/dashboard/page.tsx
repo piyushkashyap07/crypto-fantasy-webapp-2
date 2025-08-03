@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { LogOut, Plus, Users, Trophy, DollarSign, BarChart3, RefreshCw } from "lucide-react"
 import { getCurrentAdmin, adminSignOut, getAdminStats } from "@/lib/admin-auth"
+import { supabase } from "@/lib/supabase"
 import AdminPrizePoolTabs from "@/components/admin-prize-pool-tabs"
 import AddPrizePoolModal from "@/components/add-prize-pool-modal"
 import { usePrizePools } from "@/hooks/use-prize-pools"
@@ -14,33 +15,55 @@ export default function AdminDashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [stats, setStats] = useState<any>(null)
   const [activeTab, setActiveTab] = useState("upcoming")
+  const [sessionStatus, setSessionStatus] = useState("checking")
   const { prizePools, loading: poolsLoading, refetch } = usePrizePools()
   const router = useRouter()
 
   useEffect(() => {
     checkAdminAuth()
     
-    // Set up session refresh interval
+    // Set up session refresh interval - check more frequently
     const sessionInterval = setInterval(() => {
       checkAdminAuth()
-    }, 30000) // Check every 30 seconds
+    }, 60000) // Check every 60 seconds
 
-    return () => clearInterval(sessionInterval)
+    // Set up token refresh interval
+    const tokenRefreshInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession()
+        if (error) {
+          console.log("Token refresh error:", error)
+        } else {
+          console.log("Token refreshed successfully")
+        }
+      } catch (error) {
+        console.error("Error refreshing token:", error)
+      }
+    }, 300000) // Refresh token every 5 minutes
+
+    return () => {
+      clearInterval(sessionInterval)
+      clearInterval(tokenRefreshInterval)
+    }
   }, [])
 
   const checkAdminAuth = async () => {
     try {
+      setSessionStatus("checking")
       const adminUser = await getCurrentAdmin()
       if (!adminUser) {
         console.log("No admin user found, redirecting to login")
+        setSessionStatus("expired")
         router.push("/admin")
         return
       }
       console.log("Admin user authenticated:", adminUser.email)
       setAdmin(adminUser)
+      setSessionStatus("active")
       loadStats()
     } catch (error) {
       console.error("Auth check error:", error)
+      setSessionStatus("error")
       router.push("/admin")
     } finally {
       setLoading(false)
@@ -79,10 +102,22 @@ export default function AdminDashboard() {
               <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-red-600" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
-                <p className="text-sm text-gray-600">Welcome back, {admin?.email}</p>
-              </div>
+                                 <div>
+                     <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+                     <p className="text-sm text-gray-600">Welcome back, {admin?.email}</p>
+                     <div className="flex items-center space-x-2 mt-1">
+                       <div className={`w-2 h-2 rounded-full ${
+                         sessionStatus === "active" ? "bg-green-500" : 
+                         sessionStatus === "checking" ? "bg-yellow-500" : 
+                         "bg-red-500"
+                       }`}></div>
+                       <span className="text-xs text-gray-500">
+                         {sessionStatus === "active" ? "Session Active" : 
+                          sessionStatus === "checking" ? "Checking..." : 
+                          "Session Expired"}
+                       </span>
+                     </div>
+                   </div>
             </div>
             <button
               onClick={handleSignOut}

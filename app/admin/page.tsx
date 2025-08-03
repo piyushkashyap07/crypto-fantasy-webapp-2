@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, Eye, EyeOff } from "lucide-react"
 import { adminSignIn, getCurrentAdmin } from "@/lib/admin-auth"
+import { supabase } from "@/lib/supabase"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -20,9 +21,15 @@ export default function AdminLoginPage() {
 
   const checkAdminAuth = async () => {
     try {
-      const admin = await getCurrentAdmin()
-      if (admin) {
-        router.push("/admin/dashboard")
+      // Check if there's an existing session
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        const admin = await getCurrentAdmin()
+        if (admin) {
+          router.push("/admin/dashboard")
+          return
+        }
       }
     } catch (error) {
       console.error("Auth check error:", error)

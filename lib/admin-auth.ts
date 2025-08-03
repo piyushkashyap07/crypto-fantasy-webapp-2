@@ -53,19 +53,25 @@ export async function adminSignOut(): Promise<void> {
 
 export async function getCurrentAdmin(): Promise<AdminUser | null> {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    // First, try to refresh the session
+    const { data: { session }, error: refreshError } = await supabase.auth.getSession()
     
-    if (userError || !user) {
-      console.log("No authenticated user found")
+    if (refreshError) {
+      console.log("Session refresh error:", refreshError)
       return null
     }
 
-    console.log("Checking admin status for user:", user.id)
+    if (!session) {
+      console.log("No active session found")
+      return null
+    }
+
+    console.log("Session found, checking admin status for user:", session.user.id)
 
     const { data: adminUser, error: adminError } = await supabase
       .from("admin_users")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", session.user.id)
       .single()
 
     if (adminError) {

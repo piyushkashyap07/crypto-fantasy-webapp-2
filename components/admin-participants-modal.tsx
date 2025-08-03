@@ -9,13 +9,20 @@ interface Participant {
   user_uid: string
   prize_pool_id: string
   team_id: string
-  payment_status: "pending" | "confirmed" | "failed"
-  payment_amount: number
-  payment_tx_hash?: string
-  created_at: string
+  wallet_address?: string
+  transaction_hash?: string
+  payment_confirmed?: boolean
+  joined_at: string
   team?: {
-    name: string
-    tokens: string[]
+    team_name: string
+    tokens: Array<string | {
+      id: string
+      name: string
+      symbol: string
+      current_price: number
+      market_cap_rank: number
+      price_change_percentage_1h_in_currency: number
+    }>
   }
 }
 
@@ -46,10 +53,10 @@ export default function AdminParticipantsModal({
         .from("prize_pool_participants")
         .select(`
           *,
-          team:teams(name, tokens)
+          team:teams(team_name, tokens)
         `)
         .eq("prize_pool_id", prizePoolId)
-        .order("created_at", { ascending: false })
+        .order("joined_at", { ascending: false })
 
       if (error) {
         throw error
@@ -64,29 +71,19 @@ export default function AdminParticipantsModal({
     }
   }
 
-  const getPaymentStatusIcon = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return <CheckCircle className="w-4 h-4 text-green-600" />
-      case "pending":
-        return <Clock className="w-4 h-4 text-yellow-600" />
-      case "failed":
-        return <XCircle className="w-4 h-4 text-red-600" />
-      default:
-        return <Clock className="w-4 h-4 text-gray-600" />
+  const getPaymentStatusIcon = (confirmed: boolean) => {
+    if (confirmed) {
+      return <CheckCircle className="w-4 h-4 text-green-600" />
+    } else {
+      return <Clock className="w-4 h-4 text-yellow-600" />
     }
   }
 
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "failed":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const getPaymentStatusColor = (confirmed: boolean) => {
+    if (confirmed) {
+      return "bg-green-100 text-green-800"
+    } else {
+      return "bg-yellow-100 text-yellow-800"
     }
   }
 
@@ -151,52 +148,59 @@ export default function AdminParticipantsModal({
                       <p className="font-medium text-gray-800">
                         User: @{participant.user_uid}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        Team: {participant.team?.name || "Unknown"}
-                      </p>
+                                             <p className="text-sm text-gray-600">
+                         Team: {participant.team?.team_name || "Unknown"}
+                       </p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      {getPaymentStatusIcon(participant.payment_status)}
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(participant.payment_status)}`}>
-                        {participant.payment_status}
-                      </span>
-                    </div>
+                                         <div className="flex items-center space-x-2">
+                       {getPaymentStatusIcon(participant.payment_confirmed || false)}
+                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(participant.payment_confirmed || false)}`}>
+                         {participant.payment_confirmed ? "Confirmed" : "Pending"}
+                       </span>
+                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">Payment Amount:</p>
-                      <p className="font-medium">{participant.payment_amount} USDT</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Joined:</p>
-                      <p className="font-medium">
-                        {new Date(participant.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    {participant.payment_tx_hash && (
-                      <div className="md:col-span-2">
-                        <p className="text-gray-600">Transaction Hash:</p>
-                        <p className="font-mono text-xs break-all">
-                          {participant.payment_tx_hash}
-                        </p>
-                      </div>
-                    )}
-                    {participant.team?.tokens && participant.team.tokens.length > 0 && (
-                      <div className="md:col-span-2">
-                        <p className="text-gray-600">Team Tokens:</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {participant.team.tokens.map((token, index) => (
-                            <span
-                              key={index}
-                              className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
-                            >
-                              {token}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                     <div>
+                       <p className="text-gray-600">Wallet Address:</p>
+                       <p className="font-medium font-mono text-xs">
+                         {participant.wallet_address || "Not provided"}
+                       </p>
+                     </div>
+                     <div>
+                       <p className="text-gray-600">Joined:</p>
+                       <p className="font-medium">
+                         {new Date(participant.joined_at).toLocaleString()}
+                       </p>
+                     </div>
+                     {participant.transaction_hash && (
+                       <div className="md:col-span-2">
+                         <p className="text-gray-600">Transaction Hash:</p>
+                         <p className="font-mono text-xs break-all">
+                           {participant.transaction_hash}
+                         </p>
+                       </div>
+                     )}
+                                         {participant.team?.tokens && participant.team.tokens.length > 0 && (
+                       <div className="md:col-span-2">
+                         <p className="text-gray-600">Team Tokens ({participant.team.tokens.length}):</p>
+                         <div className="flex flex-wrap gap-1 mt-1">
+                           {participant.team.tokens.map((token, index) => {
+                             const tokenSymbol = typeof token === 'string' ? token : token.symbol || token.name || 'Unknown'
+                             const tokenName = typeof token === 'string' ? token : token.name || token.symbol || 'Unknown'
+                             return (
+                               <span
+                                 key={index}
+                                 className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs"
+                                 title={typeof token === 'string' ? token : `${tokenName} (${tokenSymbol})`}
+                               >
+                                 {tokenSymbol}
+                               </span>
+                             )
+                           })}
+                         </div>
+                       </div>
+                     )}
                   </div>
                 </div>
               ))}

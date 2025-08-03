@@ -12,7 +12,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     reconnectAfterMs: (tries: number) => Math.min(tries * 1000, 10000), // Exponential backoff up to 10s
   },
   auth: {
-    persistSession: false, // Since we're using anonymous users
+    persistSession: true, // Enable session persistence for admin users
+    autoRefreshToken: true, // Auto refresh tokens
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
 })
 
