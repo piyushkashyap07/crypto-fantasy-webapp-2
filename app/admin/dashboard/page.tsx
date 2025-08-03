@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { LogOut, Plus, Users, Trophy, DollarSign, BarChart3, RefreshCw } from "lucide-react"
 import { getCurrentAdmin, adminSignOut, getAdminStats } from "@/lib/admin-auth"
 import { supabase } from "@/lib/supabase"
+import { handleAuthError, refreshSessionSafely } from "@/lib/auth-recovery"
 import AdminPrizePoolTabs from "@/components/admin-prize-pool-tabs"
 import AddPrizePoolModal from "@/components/add-prize-pool-modal"
 import { usePrizePools } from "@/hooks/use-prize-pools"
@@ -22,34 +23,26 @@ export default function AdminDashboard() {
   useEffect(() => {
     checkAdminAuth()
     
-    // Set up session refresh interval - check more frequently
+    // Set up session check interval - less frequent to avoid token issues
     const sessionInterval = setInterval(() => {
       checkAdminAuth()
-    }, 60000) // Check every 60 seconds
-
-    // Set up token refresh interval
-    const tokenRefreshInterval = setInterval(async () => {
-      try {
-        const { data, error } = await supabase.auth.refreshSession()
-        if (error) {
-          console.log("Token refresh error:", error)
-        } else {
-          console.log("Token refreshed successfully")
-        }
-      } catch (error) {
-        console.error("Error refreshing token:", error)
-      }
-    }, 300000) // Refresh token every 5 minutes
+    }, 120000) // Check every 2 minutes instead of 1 minute
 
     return () => {
       clearInterval(sessionInterval)
-      clearInterval(tokenRefreshInterval)
     }
   }, [])
 
   const checkAdminAuth = async () => {
     try {
       setSessionStatus("checking")
+      
+      // Try to refresh session safely first
+      const sessionRefreshed = await refreshSessionSafely()
+      if (!sessionRefreshed) {
+        console.log("Session refresh failed")
+      }
+      
       const adminUser = await getCurrentAdmin()
       if (!adminUser) {
         console.log("No admin user found, redirecting to login")
@@ -61,10 +54,17 @@ export default function AdminDashboard() {
       setAdmin(adminUser)
       setSessionStatus("active")
       loadStats()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth check error:", error)
-      setSessionStatus("error")
-      router.push("/admin")
+      
+      // Handle authentication errors properly
+      const authResult = await handleAuthError(error)
+      if (authResult.shouldRedirect) {
+        setSessionStatus("error")
+        router.push("/admin")
+      } else {
+        setSessionStatus("error")
+      }
     } finally {
       setLoading(false)
     }
@@ -74,8 +74,15 @@ export default function AdminDashboard() {
     try {
       const adminStats = await getAdminStats()
       setStats(adminStats)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading stats:", error)
+      
+      // Handle authentication errors in stats loading
+      if (error.message?.includes("Invalid Refresh Token") || 
+          error.message?.includes("Refresh Token Not Found")) {
+        console.log("Auth error in stats loading, will retry on next check")
+        // Don't redirect here, let the main auth check handle it
+      }
     }
   }
 
@@ -119,13 +126,23 @@ export default function AdminDashboard() {
                      </div>
                    </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={checkAdminAuth}
+                className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                title="Refresh Session"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Refresh</span>
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

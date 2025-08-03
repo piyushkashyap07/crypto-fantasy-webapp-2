@@ -6,6 +6,7 @@ import { deletePrizePool, updatePrizePool } from "@/lib/admin-auth"
 import EditRecipientModal from "./edit-recipient-modal"
 import AdminParticipantsModal from "./admin-participants-modal"
 import EditPrizePoolModal from "./edit-prize-pool-modal"
+import DownloadExcelButton from "./download-excel-button"
 
 interface AdminPrizePoolTabsProps {
   activeTab: string
@@ -195,6 +196,22 @@ export default function AdminPrizePoolTabs({
             >
               View Details
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Download Excel Button for Finished Pools */}
+      {pool.status === "finished" && (
+        <div className="mt-4 p-3 bg-green-50 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-green-800">
+              <span className="font-medium">Prize Distribution</span> - Download Excel file for payments
+            </div>
+            <DownloadExcelButton 
+              prizePoolId={pool.id}
+              prizePoolName={pool.name}
+              isFinished={pool.status === "finished"}
+            />
           </div>
         </div>
       )}
