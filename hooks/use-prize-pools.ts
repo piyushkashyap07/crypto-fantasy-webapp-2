@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase, getPrizePools } from "@/lib/supabase"
 import { lockPricesForPool, finalizePricesAndRankings } from "@/lib/leaderboard"
+import { cache, CACHE_KEYS } from "@/lib/cache"
 
 export function usePrizePools() {
   const [prizePools, setPrizePools] = useState<any[]>([])
@@ -10,8 +11,21 @@ export function usePrizePools() {
 
   const fetchPrizePools = useCallback(async () => {
     try {
+      // Check cache first
+      const cachedData = cache.get(CACHE_KEYS.PRIZE_POOLS)
+      if (cachedData) {
+        console.log("📦 Using cached prize pools data")
+        setPrizePools(cachedData)
+        setLoading(false)
+        return
+      }
+
+      console.log("🌐 Fetching fresh prize pools data")
       const data = await getPrizePools()
       setPrizePools(data)
+      
+      // Cache the data for 30 seconds
+      cache.set(CACHE_KEYS.PRIZE_POOLS, data, 30000)
     } catch (error) {
       console.error("Error fetching prize pools:", error)
       setPrizePools([])
@@ -26,6 +40,9 @@ export function usePrizePools() {
     if (payload.eventType === "UPDATE") {
       const updatedPool = payload.new
       const oldPool = payload.old
+
+      // Invalidate cache when pool data changes
+      cache.delete(CACHE_KEYS.PRIZE_POOLS)
 
       // Check if status changed to ongoing
       if (updatedPool.status === "ongoing" && oldPool.status === "upcoming") {

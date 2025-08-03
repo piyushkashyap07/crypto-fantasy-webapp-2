@@ -6,6 +6,7 @@ import CreateTeamModal from "./create-team-modal"
 import PrizeDistributionModal from "./prize-distribution-modal"
 import PrizePoolTimer from "./prize-pool-timer"
 import { useAuth } from "@/hooks/use-auth"
+import { debugPoolStatus } from "@/lib/debug-pool-status"
 
 interface PrizePoolCardProps {
   pool: any
@@ -97,7 +98,7 @@ export default function PrizePoolCard({ pool, onUpdate }: PrizePoolCardProps) {
         )}
 
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-          {pool.status === "upcoming" ? (
+          {pool.status === "upcoming" && pool.current_participants < pool.max_participants ? (
             <>
               <button
                 onClick={() => setShowJoinModal(true)}
@@ -112,6 +113,19 @@ export default function PrizePoolCard({ pool, onUpdate }: PrizePoolCardProps) {
                 Cash Rewards
               </button>
             </>
+          ) : pool.status === "upcoming" && pool.current_participants >= pool.max_participants ? (
+            <div className="w-full text-center space-y-2">
+              <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-3 rounded-lg">
+                <div className="font-semibold">Pool Full!</div>
+                <div className="text-sm">Waiting for contest to start...</div>
+              </div>
+              <button
+                onClick={() => debugPoolStatus(pool.id)}
+                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+              >
+                Debug Status
+              </button>
+            </div>
           ) : pool.status === "ongoing" ? (
             <button
               onClick={() => setShowPrizeDistribution(true)}
@@ -139,13 +153,14 @@ export default function PrizePoolCard({ pool, onUpdate }: PrizePoolCardProps) {
         />
       )}
 
-      {showCreateTeamModal && (
-        <CreateTeamModal
-          onClose={() => setShowCreateTeamModal(false)}
-          onSuccess={handleTeamCreated}
-          userUID={userUID}
-        />
-      )}
+        {showCreateTeamModal && (
+          <CreateTeamModal
+            onClose={() => setShowCreateTeamModal(false)}
+            onSuccess={handleTeamCreated}
+            userUID={userUID}
+            poolId={pool.id}
+          />
+        )}
 
       {showPrizeDistribution && (
         <PrizeDistributionModal onClose={() => setShowPrizeDistribution(false)} prizePool={pool} />

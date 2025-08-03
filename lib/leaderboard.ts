@@ -149,6 +149,18 @@ export async function finalizePricesAndRankings(prizePoolId: string) {
   try {
     console.log("🏁 Finalizing prices and rankings for pool:", prizePoolId)
 
+    // Check if final rankings already exist
+    const { data: existingRankings } = await supabase
+      .from("final_rankings")
+      .select("id")
+      .eq("prize_pool_id", prizePoolId)
+      .limit(1)
+
+    if (existingRankings && existingRankings.length > 0) {
+      console.log("⚠️ Final rankings already exist for pool:", prizePoolId)
+      return { success: true, message: "Final rankings already exist" }
+    }
+
     // Get leaderboard data
     const leaderboard = await getLeaderboard(prizePoolId, false)
 
@@ -273,7 +285,21 @@ export async function getLeaderboard(prizePoolId: string, isFinished = false): P
     console.log("📊 Getting leaderboard for pool:", prizePoolId, "finished:", isFinished)
 
     if (isFinished) {
-      // Get final rankings if finished
+      // First get actual participants for this pool
+      const { data: participants } = await supabase
+        .from("prize_pool_participants")
+        .select("team_id")
+        .eq("prize_pool_id", prizePoolId)
+
+      if (!participants || participants.length === 0) {
+        console.log("⚠️ No participants found for finished pool")
+        return []
+      }
+
+      const participantTeamIds = participants.map(p => p.team_id)
+      console.log("👥 Actual participants:", participantTeamIds)
+
+      // Get final rankings only for actual participants
       const { data: finalRankings } = await supabase
         .from("final_rankings")
         .select(`
@@ -281,16 +307,26 @@ export async function getLeaderboard(prizePoolId: string, isFinished = false): P
           teams!inner(team_name, tokens)
         `)
         .eq("prize_pool_id", prizePoolId)
+        .in("team_id", participantTeamIds)
         .order("final_rank")
 
       if (finalRankings && finalRankings.length > 0) {
+        console.log("🏆 Found final rankings:", finalRankings.length, "for participants:", participantTeamIds.length)
+        
         const { data: finalPrices } = await supabase.from("final_prices").select("*").eq("prize_pool_id", prizePoolId)
         const finalPriceMap = new Map(finalPrices?.map((fp) => [fp.coin_id, fp.final_price]) || [])
 
         const { data: lockedPrices } = await supabase.from("locked_prices").select("*").eq("prize_pool_id", prizePoolId)
         const lockedPriceMap = new Map(lockedPrices?.map((lp) => [lp.coin_id, lp.locked_price]) || [])
 
-        return finalRankings.map((ranking: any) => ({
+                // Remove duplicates by team_id (keep first occurrence)
+        const uniqueRankings = finalRankings.filter((ranking, index, self) => 
+          index === self.findIndex(r => r.team_id === ranking.team_id)
+        )
+        
+        console.log("🔍 Original rankings:", finalRankings.length, "Unique rankings:", uniqueRankings.length)
+        
+        const leaderboard = uniqueRankings.map((ranking: any) => ({
           team_id: ranking.team_id,
           team_name: ranking.teams.team_name,
           user_uid: ranking.user_uid,
@@ -315,13 +351,16 @@ export async function getLeaderboard(prizePoolId: string, isFinished = false): P
             }
           }),
         }))
-      } else {
-        // If no final rankings exist yet, calculate them now
-        console.log("⚠️ No final rankings found, calculating now...")
-        await finalizePricesAndRankings(prizePoolId)
-        // Recursively call to get the newly created rankings
-        return getLeaderboard(prizePoolId, true)
-      }
+        
+        console.log("✅ Returning leaderboard with", leaderboard.length, "teams")
+        return leaderboard
+        } else {
+          // If no final rankings exist yet, calculate them now
+          console.log("⚠️ No final rankings found, calculating now...")
+          await finalizePricesAndRankings(prizePoolId)
+          // Recursively call to get the newly created rankings
+          return getLeaderboard(prizePoolId, true)
+        }
     }
 
     // Get live leaderboard for ongoing pools

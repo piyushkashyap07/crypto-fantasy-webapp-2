@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Layout from "@/components/layout"
 import PrizePoolCard from "@/components/prize-pool-card"
+import PrizePoolSkeleton from "@/components/prize-pool-skeleton"
 import TeamSelectionDropdown from "@/components/team-selection-dropdown"
 import { usePrizePools } from "@/hooks/use-prize-pools"
 import type { Team } from "@/lib/teams"
@@ -21,8 +22,9 @@ export default function HomePage() {
           <TeamSelectionDropdown selectedTeam={selectedTeam} onTeamSelect={setSelectedTeam} />
 
           {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <PrizePoolSkeleton />
+              <PrizePoolSkeleton />
             </div>
           ) : upcomingPools.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

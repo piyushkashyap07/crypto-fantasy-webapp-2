@@ -1,5 +1,6 @@
 import { supabase } from "./supabase"
 import { lockPricesForPool } from "./leaderboard"
+import { cache, CACHE_KEYS } from "./cache"
 
 export async function joinPrizePool(prizePoolId: string, userUID: string, teamId: string) {
   try {
@@ -72,6 +73,9 @@ export async function joinPrizePool(prizePoolId: string, userUID: string, teamId
     const { error: updateError } = await supabase.from("prize_pools").update(updateData).eq("id", prizePoolId)
 
     if (updateError) throw updateError
+
+    // Invalidate cache when pool data changes
+    cache.delete(CACHE_KEYS.PRIZE_POOLS)
 
     // If we just started the pool, lock prices immediately
     if (shouldStartPool && prizePool.status === "upcoming") {

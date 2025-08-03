@@ -9,9 +9,10 @@ interface CreateTeamModalProps {
   onClose: () => void
   onSuccess: () => void
   userUID: string
+  poolId?: string // Optional pool ID for pool-specific team creation
 }
 
-export default function CreateTeamModal({ onClose, onSuccess, userUID }: CreateTeamModalProps) {
+export default function CreateTeamModal({ onClose, onSuccess, userUID, poolId }: CreateTeamModalProps) {
   const [teamName, setTeamName] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [allCryptos, setAllCryptos] = useState<CryptoCurrency[]>([])
@@ -94,7 +95,7 @@ export default function CreateTeamModal({ onClose, onSuccess, userUID }: CreateT
       setCreating(true)
       setError("")
 
-      await createTeam(userUID, teamName.trim(), selectedTokens)
+      await createTeam(userUID, teamName.trim(), selectedTokens, poolId)
 
       alert("Team created successfully!")
       onSuccess()
