@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, Wallet, Users, Edit, Eye, Users as UsersIcon } from "lucide-react"
+import { Trash2, Wallet, Users, Edit, Eye, Users as UsersIcon, Trophy } from "lucide-react"
 import { deletePrizePool, updatePrizePool } from "@/lib/admin-auth"
 import EditRecipientModal from "./edit-recipient-modal"
 import AdminParticipantsModal from "./admin-participants-modal"
 import EditPrizePoolModal from "./edit-prize-pool-modal"
 import DownloadExcelButton from "./download-excel-button"
+import TeamResultsModal from "./team-results-modal"
 
 interface AdminPrizePoolTabsProps {
   activeTab: string
@@ -26,6 +27,7 @@ export default function AdminPrizePoolTabs({
   const [showEditRecipient, setShowEditRecipient] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
   const [showEditPrizePool, setShowEditPrizePool] = useState(false)
+  const [showTeamResults, setShowTeamResults] = useState(false)
   const [selectedPool, setSelectedPool] = useState<any>(null)
 
   const upcomingPools = prizePools.filter((pool) => pool.status === "upcoming")
@@ -81,6 +83,11 @@ export default function AdminPrizePoolTabs({
     setShowEditPrizePool(true)
   }
 
+  const handleViewTeamResults = (pool: any) => {
+    setSelectedPool(pool)
+    setShowTeamResults(true)
+  }
+
   const getCurrentPools = () => {
     switch (activeTab) {
       case "upcoming":
@@ -127,6 +134,15 @@ export default function AdminPrizePoolTabs({
             >
               <UsersIcon className="w-5 h-5" />
             </button>
+            {pool.status === "finished" && (
+              <button
+                onClick={() => handleViewTeamResults(pool)}
+                className="text-purple-600 hover:text-purple-700 transition-colors p-2 hover:bg-purple-50 rounded"
+                title="View Team Results"
+              >
+                <Trophy className="w-5 h-5" />
+              </button>
+            )}
             <button
               onClick={() => handleEditPrizePool(pool)}
               className="text-orange-600 hover:text-orange-700 transition-colors p-2 hover:bg-orange-50 rounded"
@@ -274,6 +290,14 @@ export default function AdminPrizePoolTabs({
           prizePool={selectedPool}
           onClose={() => setShowEditPrizePool(false)}
           onUpdate={onUpdate}
+        />
+      )}
+
+      {showTeamResults && selectedPool && (
+        <TeamResultsModal
+          prizePoolId={selectedPool.id}
+          prizePoolName={selectedPool.name}
+          onClose={() => setShowTeamResults(false)}
         />
       )}
     </>
