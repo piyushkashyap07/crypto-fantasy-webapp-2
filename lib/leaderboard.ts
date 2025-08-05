@@ -28,14 +28,19 @@ export async function lockPricesForPool(prizePoolId: string) {
     console.log("🔒 Starting price lock for pool:", prizePoolId)
 
     // First check if prices are already locked
-    const { data: existingLocks } = await supabase
+    const { data: existingLocks, error: checkError } = await supabase
       .from("locked_prices")
       .select("coin_id")
       .eq("prize_pool_id", prizePoolId)
-      .limit(1)
+
+    if (checkError) {
+      console.error("❌ Error checking existing locked prices:", checkError)
+      throw checkError
+    }
 
     if (existingLocks && existingLocks.length > 0) {
-      console.log("⚠️ Prices already locked for pool:", prizePoolId)
+      console.log("✅ Prices already locked for pool:", prizePoolId)
+      console.log("   Found", existingLocks.length, "locked prices")
       return { success: true, message: "Prices already locked" }
     }
 
@@ -117,31 +122,39 @@ export async function lockPricesForPool(prizePoolId: string) {
     console.log("💾 Inserting locked prices:", lockedPricesData.length, "records")
     console.log("📊 Sample locked prices:", lockedPricesData.slice(0, 3))
 
-    const { error: insertError } = await supabase.from("locked_prices").insert(lockedPricesData)
+    // Use upsert to handle race conditions - if prices already exist, they won't be inserted
+    const { error: insertError } = await supabase
+      .from("locked_prices")
+      .upsert(lockedPricesData, { 
+        onConflict: 'prize_pool_id,coin_id',
+        ignoreDuplicates: true 
+      })
 
     if (insertError) {
       console.error("❌ Error inserting locked prices:", insertError)
       throw insertError
     }
 
-    // Verify insertion
-    const { data: verifyLocks, error: verifyError } = await supabase
+    // Verify the insertion worked
+    const { data: verifiedPrices, error: verifyError } = await supabase
       .from("locked_prices")
-      .select("coin_id, locked_price")
+      .select("*")
       .eq("prize_pool_id", prizePoolId)
 
     if (verifyError) {
       console.error("❌ Error verifying locked prices:", verifyError)
     } else {
-      console.log("✅ Verified locked prices:", verifyLocks?.length, "records stored")
-      console.log("📊 Sample verified prices:", verifyLocks?.slice(0, 3))
+      console.log("✅ Verified locked prices:", verifiedPrices?.length || 0, "records stored")
+      if (verifiedPrices && verifiedPrices.length > 0) {
+        console.log("📊 Sample verified prices:", verifiedPrices.slice(0, 3))
+      }
     }
 
     console.log("✅ Successfully locked", lockedPricesData.length, "prices for pool:", prizePoolId)
-    return { success: true, message: `Locked ${lockedPricesData.length} prices` }
+    return { success: true, message: "Prices locked successfully" }
   } catch (error) {
-    console.error("💥 Error locking prices:", error)
-    throw error
+    console.error("❌ Failed to lock prices:", error)
+    return { success: false, message: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 

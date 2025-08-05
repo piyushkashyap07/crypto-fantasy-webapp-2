@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react"
 import { X, Trophy, Info, Users, Clock, DollarSign, TrendingUp, Award } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { debugFinalRankings } from "@/lib/debug-final-rankings"
-import { cleanupDuplicateRankings } from "@/lib/cleanup-duplicate-rankings"
+
+
 
 interface PrizeDistributionModalProps {
   onClose: () => void
@@ -169,18 +169,6 @@ export default function PrizeDistributionModal({ onClose, prizePool }: PrizeDist
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            <button
-              onClick={() => debugFinalRankings(prizePool.id)}
-              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-            >
-              Debug Rankings
-            </button>
-            <button
-              onClick={() => cleanupDuplicateRankings(prizePool.id)}
-              className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
-            >
-              Clean Duplicates
-            </button>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
               <X className="w-6 h-6" />
             </button>

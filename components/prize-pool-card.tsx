@@ -6,7 +6,7 @@ import CreateTeamModal from "./create-team-modal"
 import PrizeDistributionModal from "./prize-distribution-modal"
 import PrizePoolTimer from "./prize-pool-timer"
 import { useAuth } from "@/hooks/use-auth"
-import { debugPoolStatus } from "@/lib/debug-pool-status"
+
 
 interface PrizePoolCardProps {
   pool: any
@@ -114,18 +114,12 @@ export default function PrizePoolCard({ pool, onUpdate }: PrizePoolCardProps) {
               </button>
             </>
           ) : pool.status === "upcoming" && pool.current_participants >= pool.max_participants ? (
-            <div className="w-full text-center space-y-2">
-              <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-3 rounded-lg">
-                <div className="font-semibold">Pool Full!</div>
-                <div className="text-sm">Waiting for contest to start...</div>
+                          <div className="w-full text-center space-y-2">
+                <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-3 rounded-lg">
+                  <div className="font-semibold">Pool Full!</div>
+                  <div className="text-sm">Waiting for contest to start...</div>
+                </div>
               </div>
-              <button
-                onClick={() => debugPoolStatus(pool.id)}
-                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-              >
-                Debug Status
-              </button>
-            </div>
           ) : pool.status === "ongoing" ? (
             <button
               onClick={() => setShowPrizeDistribution(true)}

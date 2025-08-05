@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Download, Loader2 } from "lucide-react"
-import { generatePrizeDistributionExcel, downloadExcelFile } from "@/lib/excel-generator"
+import { downloadExcelFile } from "@/lib/excel-generator"
 
 interface DownloadExcelButtonProps {
   prizePoolId: string
@@ -30,7 +30,15 @@ export default function DownloadExcelButton({
     try {
       console.log("📥 Starting Excel download for pool:", prizePoolId)
       
-      const result = await generatePrizeDistributionExcel(prizePoolId)
+      const response = await fetch('/api/generate-excel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prizePoolId })
+    })
+    
+    const result = await response.json()
       
       if (!result.success) {
         setError(result.error || "Failed to generate Excel file")

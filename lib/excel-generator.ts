@@ -110,6 +110,7 @@ export async function generatePrizeDistributionExcel(prizePoolId: string): Promi
     }
 
     console.log("✅ Generated Excel rows:", excelRows.length)
+    
     return {
       success: true,
       data: excelRows

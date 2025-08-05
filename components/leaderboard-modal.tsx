@@ -5,7 +5,7 @@ import { X, Trophy, TrendingUp, Info, Search } from "lucide-react"
 import { getLeaderboard, type TeamScore } from "@/lib/leaderboard"
 import PrizePoolTimer from "./prize-pool-timer"
 import PortfolioModal from "./portfolio-modal"
-import { cleanupDuplicateRankings } from "@/lib/cleanup-duplicate-rankings"
+
 
 interface LeaderboardModalProps {
   onClose: () => void

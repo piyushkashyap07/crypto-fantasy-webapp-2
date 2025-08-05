@@ -52,42 +52,23 @@ export async function joinPrizePool(prizePoolId: string, userUID: string, teamId
 
     if (participantError) throw participantError
 
-    // Update participant count
-    const newParticipantCount = prizePool.current_participants + 1
-    const shouldStartPool = newParticipantCount >= prizePool.max_participants
+    // Use the RPC function to increment participant count and auto-start pool
+    const { error: countError } = await supabase.rpc("increment_prize_pool_participants", {
+      pool_id: prizePoolId,
+    })
 
-    console.log("📊 New participant count:", newParticipantCount, "/", prizePool.max_participants)
-    console.log("🚀 Should start pool?", shouldStartPool)
-
-    const updateData: any = {
-      current_participants: newParticipantCount,
+    if (countError) {
+      console.error("❌ Error updating participant count:", countError)
+      throw countError
     }
 
-    // If pool is now full, start it immediately
-    if (shouldStartPool && prizePool.status === "upcoming") {
-      updateData.status = "ongoing"
-      updateData.started_at = new Date().toISOString()
-      console.log("🎉 Pool is now full! Starting immediately...")
-    }
-
-    const { error: updateError } = await supabase.from("prize_pools").update(updateData).eq("id", prizePoolId)
-
-    if (updateError) throw updateError
+    console.log("✅ Participant added and count updated using RPC function")
 
     // Invalidate cache when pool data changes
     cache.delete(CACHE_KEYS.PRIZE_POOLS)
 
-    // If we just started the pool, lock prices immediately
-    if (shouldStartPool && prizePool.status === "upcoming") {
-      console.log("🔒 Pool just started, locking prices now...")
-      try {
-        const result = await lockPricesForPool(prizePoolId)
-        console.log("✅ Price locking result:", result)
-      } catch (lockError) {
-        console.error("❌ Failed to lock prices:", lockError)
-        // Don't throw here - the join was successful, price locking is secondary
-      }
-    }
+    // Price locking will be handled by the real-time subscription when pool status changes
+    console.log("🔄 Pool status change will trigger price locking via real-time subscription")
 
     return { success: true }
   } catch (error) {

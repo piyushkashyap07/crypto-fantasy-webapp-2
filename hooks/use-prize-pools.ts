@@ -35,7 +35,12 @@ export function usePrizePools() {
   }, [])
 
   const handleStatusChange = useCallback(async (payload: any) => {
-    console.log("🔄 Prize pool change detected:", payload)
+    console.log("🔄 Real-time: Prize pool change detected")
+    console.log("   Event type:", payload.eventType)
+    console.log("   Pool ID:", payload.new?.id)
+    console.log("   Old status:", payload.old?.status)
+    console.log("   New status:", payload.new?.status)
+    console.log("   Timestamp:", new Date().toISOString())
 
     if (payload.eventType === "UPDATE") {
       const updatedPool = payload.new
@@ -43,28 +48,49 @@ export function usePrizePools() {
 
       // Invalidate cache when pool data changes
       cache.delete(CACHE_KEYS.PRIZE_POOLS)
+      console.log("🗑️ Cache invalidated for prize pools")
 
       // Check if status changed to ongoing
       if (updatedPool.status === "ongoing" && oldPool.status === "upcoming") {
-        console.log("🚀 Pool became ongoing, locking prices immediately:", updatedPool.id)
+        console.log("🚀 Real-time: Pool became ongoing, locking prices immediately")
+        console.log("   Pool ID:", updatedPool.id)
+        console.log("   Pool name:", updatedPool.name)
 
         try {
           // Lock prices immediately when pool becomes ongoing
           const result = await lockPricesForPool(updatedPool.id)
-          console.log("✅ Price locking result:", result)
+          console.log("✅ Real-time: Price locking result:", result)
         } catch (error) {
-          console.error("❌ Failed to lock prices for pool:", updatedPool.id, error)
+          console.error("❌ Real-time: Failed to lock prices for pool:", updatedPool.id, error)
         }
       }
 
       // Check if status changed to finished
       if (updatedPool.status === "finished" && oldPool.status === "ongoing") {
-        console.log("🏁 Pool finished, finalizing prices and rankings:", updatedPool.id)
+        console.log("🏁 Real-time: Pool finished, starting completion process")
+        console.log("   Pool ID:", updatedPool.id)
+        console.log("   Pool name:", updatedPool.name)
+        console.log("   Started at:", updatedPool.started_at)
+        console.log("   Duration:", updatedPool.duration_minutes, "minutes")
+        
         try {
-          await finalizePricesAndRankings(updatedPool.id)
-          console.log("✅ Prices and rankings finalized for pool:", updatedPool.id)
+          // Step 1: Finalize prices and rankings
+          console.log("📊 Real-time: Step 1 - Finalizing prices and rankings...")
+          try {
+            await finalizePricesAndRankings(updatedPool.id)
+            console.log("✅ Real-time: Step 1 completed - Prices and rankings finalized")
+          } catch (finalizeError) {
+            console.error("❌ Real-time: Step 1 failed - Error finalizing prices and rankings")
+            console.error("   Pool ID:", updatedPool.id)
+            console.error("   Error:", finalizeError)
+            // Continue with the process even if finalization fails
+          }
+          
+          console.log("🏁 Real-time: Pool completion process finished")
         } catch (error) {
-          console.error("❌ Failed to finalize prices and rankings for pool:", updatedPool.id, error)
+          console.error("❌ Real-time: Failed to finalize prices and rankings for pool")
+          console.error("   Pool ID:", updatedPool.id)
+          console.error("   Error:", error)
         }
       }
     }
@@ -93,6 +119,11 @@ export function usePrizePools() {
             },
             (payload) => {
               console.log("📡 Real-time change received:", payload)
+              console.log("   Event type:", payload.eventType)
+              console.log("   Pool ID:", (payload.new as any)?.id || 'unknown')
+              console.log("   Old status:", (payload.old as any)?.status || 'unknown')
+              console.log("   New status:", (payload.new as any)?.status || 'unknown')
+              console.log("   Timestamp:", new Date().toISOString())
 
               try {
                 // Handle status changes first
@@ -112,6 +143,7 @@ export function usePrizePools() {
                   showNotification(payload.new)
                 } else if (payload.eventType === "UPDATE") {
                   console.log("🔄 Updating prize pool:", payload.new)
+                  console.log("   Status changed from:", (payload.old as any)?.status || 'unknown', "to:", (payload.new as any)?.status || 'unknown')
                   setPrizePools((prev) => prev.map((pool) => (pool.id === payload.new.id ? payload.new : pool)))
                 } else if (payload.eventType === "DELETE") {
                   console.log("🗑️ Deleting prize pool:", payload.old)

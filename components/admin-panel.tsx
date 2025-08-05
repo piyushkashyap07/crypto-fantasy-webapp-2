@@ -1,80 +1,155 @@
 "use client"
 
-import { useState } from "react"
-import { X, Plus } from "lucide-react"
-import AdminPrizePoolTabs from "./admin-prize-pool-tabs"
-import AddPrizePoolModal from "./add-prize-pool-modal"
-import { usePrizePools } from "@/hooks/use-prize-pools"
-import { useAuth } from "@/hooks/use-auth"
+import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Clock, Users, DollarSign, Trophy, CheckCircle, RefreshCw, Settings } from "lucide-react"
 
-interface AdminPanelProps {
-  onClose: () => void
-}
+export default function AdminPanel() {
+  const [stats, setStats] = useState({
+    totalPools: 0,
+    ongoingPools: 0,
+    finishedPools: 0,
+    totalParticipants: 0,
+  })
+  const [loading, setLoading] = useState(true)
 
-export default function AdminPanel({ onClose }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState("upcoming")
-  const [showAddModal, setShowAddModal] = useState(false)
-  const { prizePools, loading } = usePrizePools()
-  const { isAdminUser } = useAuth()
+  const fetchStats = async () => {
+    try {
+      setLoading(true)
+      
+      // Get total pools
+      const { count: totalPools } = await supabase
+        .from("prize_pools")
+        .select("*", { count: "exact", head: true })
 
-  if (!isAdminUser) {
+      // Get ongoing pools
+      const { count: ongoingPools } = await supabase
+        .from("prize_pools")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "ongoing")
+
+      // Get finished pools
+      const { count: finishedPools } = await supabase
+        .from("prize_pools")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "finished")
+
+      // Get total participants
+      const { count: totalParticipants } = await supabase
+        .from("prize_pool_participants")
+        .select("*", { count: "exact", head: true })
+
+      setStats({
+        totalPools: totalPools || 0,
+        ongoingPools: ongoingPools || 0,
+        finishedPools: finishedPools || 0,
+        totalParticipants: totalParticipants || 0,
+      })
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchStats()
+  }, [])
+
+  if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Access Denied</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <p className="text-gray-600 mb-4">You need admin privileges to access this panel.</p>
-          <button
-            onClick={onClose}
-            className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white py-2 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity"
-          >
-            Close
-          </button>
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
-          <div className="flex justify-between items-center p-6 border-b">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent">
-              Admin Panel
-            </h2>
-            <div className="flex items-center space-x-4">
-              {activeTab === "upcoming" && (
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center space-x-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Prize Pool</span>
-                </button>
-              )}
-              <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-                <X className="w-6 h-6" />
-              </button>
+    <div className="container mx-auto p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+        <p className="text-gray-600 mt-2">Monitor your platform's performance</p>
             </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Pools</CardTitle>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalPools}</div>
+            <p className="text-xs text-muted-foreground">
+              All time pools created
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ongoing Pools</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.ongoingPools}</div>
+            <p className="text-xs text-muted-foreground">
+              Currently active pools
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Finished Pools</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.finishedPools}</div>
+            <p className="text-xs text-muted-foreground">
+              Completed pools
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Participants</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalParticipants}</div>
+            <p className="text-xs text-muted-foreground">
+              All time participants
+            </p>
+          </CardContent>
+        </Card>
           </div>
 
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-            <AdminPrizePoolTabs
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              prizePools={prizePools}
-              loading={loading}
-            />
+      {/* Quick Actions */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button onClick={fetchStats} className="w-full">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh Stats
+            </Button>
+            <Button variant="outline" className="w-full">
+              <Settings className="mr-2 h-4 w-4" />
+              System Settings
+            </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
       </div>
-
-      {showAddModal && <AddPrizePoolModal onClose={() => setShowAddModal(false)} />}
-    </>
   )
 }
+
