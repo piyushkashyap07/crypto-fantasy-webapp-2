@@ -7,9 +7,9 @@ import { ThirdwebProvider } from "thirdweb/react"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Realtime Contest Platform",
+  title: "pumpfantasy",
   description: "Join crypto trading contests and compete for prizes",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
 }
 
 export default function RootLayout({

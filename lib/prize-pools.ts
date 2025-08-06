@@ -79,26 +79,105 @@ export async function joinPrizePool(prizePoolId: string, userUID: string, teamId
 
 export async function deletePrizePool(prizePoolId: string) {
   try {
+    console.log("🗑️ Starting deletion of prize pool:", prizePoolId)
+
+    // First, update teams to remove the pool reference (set created_for_pool_id to null)
+    const { error: teamsUpdateError } = await supabase
+      .from("teams")
+      .update({ created_for_pool_id: null })
+      .eq("created_for_pool_id", prizePoolId)
+
+    if (teamsUpdateError) {
+      console.error("❌ Error updating teams:", teamsUpdateError)
+      throw teamsUpdateError
+    }
+
+    console.log("✅ Updated teams to remove pool reference")
+
     // Delete all participants first
-    await supabase.from("prize_pool_participants").delete().eq("prize_pool_id", prizePoolId)
+    const { error: participantsError } = await supabase
+      .from("prize_pool_participants")
+      .delete()
+      .eq("prize_pool_id", prizePoolId)
+
+    if (participantsError) {
+      console.error("❌ Error deleting participants:", participantsError)
+      throw participantsError
+    }
+
+    console.log("✅ Deleted participants")
 
     // Delete locked prices
-    await supabase.from("locked_prices").delete().eq("prize_pool_id", prizePoolId)
+    const { error: lockedPricesError } = await supabase
+      .from("locked_prices")
+      .delete()
+      .eq("prize_pool_id", prizePoolId)
+
+    if (lockedPricesError) {
+      console.error("❌ Error deleting locked prices:", lockedPricesError)
+      throw lockedPricesError
+    }
+
+    console.log("✅ Deleted locked prices")
 
     // Delete final prices
-    await supabase.from("final_prices").delete().eq("prize_pool_id", prizePoolId)
+    const { error: finalPricesError } = await supabase
+      .from("final_prices")
+      .delete()
+      .eq("prize_pool_id", prizePoolId)
+
+    if (finalPricesError) {
+      console.error("❌ Error deleting final prices:", finalPricesError)
+      throw finalPricesError
+    }
+
+    console.log("✅ Deleted final prices")
 
     // Delete final rankings
-    await supabase.from("final_rankings").delete().eq("prize_pool_id", prizePoolId)
+    const { error: rankingsError } = await supabase
+      .from("final_rankings")
+      .delete()
+      .eq("prize_pool_id", prizePoolId)
 
-    // Delete the prize pool
-    const { error } = await supabase.from("prize_pools").delete().eq("id", prizePoolId)
+    if (rankingsError) {
+      console.error("❌ Error deleting final rankings:", rankingsError)
+      throw rankingsError
+    }
 
-    if (error) throw error
+    console.log("✅ Deleted final rankings")
+
+    // Delete payments associated with this pool
+    const { error: paymentsError } = await supabase
+      .from("payments")
+      .delete()
+      .eq("prize_pool_id", prizePoolId)
+
+    if (paymentsError) {
+      console.error("❌ Error deleting payments:", paymentsError)
+      throw paymentsError
+    }
+
+    console.log("✅ Deleted payments")
+
+    // Finally, delete the prize pool
+    const { error: poolError } = await supabase
+      .from("prize_pools")
+      .delete()
+      .eq("id", prizePoolId)
+
+    if (poolError) {
+      console.error("❌ Error deleting prize pool:", poolError)
+      throw poolError
+    }
+
+    console.log("✅ Successfully deleted prize pool:", prizePoolId)
+
+    // Invalidate cache
+    cache.delete(CACHE_KEYS.PRIZE_POOLS)
 
     return { success: true }
   } catch (error) {
-    console.error("Error deleting prize pool:", error)
+    console.error("💥 Error deleting prize pool:", error)
     throw error
   }
 }

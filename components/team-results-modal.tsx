@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Trophy, DollarSign, Users, Award } from "lucide-react"
+import { X, Trophy, Copy, Check } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 interface TeamResult {
@@ -11,7 +11,6 @@ interface TeamResult {
   final_rank: number
   prize_amount: number
   wallet_address: string
-  tokens: any[]
 }
 
 interface TeamResultsModalProps {
@@ -28,7 +27,7 @@ export default function TeamResultsModal({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [teamResults, setTeamResults] = useState<TeamResult[]>([])
-  const [poolStats, setPoolStats] = useState<any>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetchTeamResults()
@@ -49,8 +48,7 @@ export default function TeamResultsModal({
           final_rank,
           prize_amount,
           teams!inner(
-            team_name,
-            tokens
+            team_name
           )
         `)
         .eq("prize_pool_id", prizePoolId)
@@ -59,6 +57,13 @@ export default function TeamResultsModal({
       if (rankingsError) {
         throw rankingsError
       }
+
+      // Get prize pool details for prize calculation
+      const { data: prizePool } = await supabase
+        .from("prize_pools")
+        .select("prize_pool_size, distribution_type, distribution_config")
+        .eq("id", prizePoolId)
+        .single()
 
       // Get wallet addresses for each participant
       const resultsWithWallets: TeamResult[] = []
@@ -90,26 +95,25 @@ export default function TeamResultsModal({
           }
         }
 
+        // Calculate prize amount if not stored correctly
+        let prizeAmount = ranking.prize_amount || 0
+        
+        // If prize amount is 0 or null, try to calculate it
+        if (prizeAmount === 0 && prizePool) {
+          prizeAmount = calculatePrizeAmount(ranking.final_rank, prizePool)
+        }
+
         resultsWithWallets.push({
           id: ranking.id,
-          team_name: ranking.teams.team_name,
+          team_name: (ranking.teams as any).team_name,
           user_uid: ranking.user_uid,
           final_rank: ranking.final_rank,
-          prize_amount: ranking.prize_amount,
-          wallet_address: walletAddress,
-          tokens: ranking.teams.tokens || []
+          prize_amount: prizeAmount,
+          wallet_address: walletAddress
         })
       }
 
-      // Get pool statistics
-      const { data: pool } = await supabase
-        .from("prize_pools")
-        .select("*")
-        .eq("id", prizePoolId)
-        .single()
-
       setTeamResults(resultsWithWallets)
-      setPoolStats(pool)
 
     } catch (error: any) {
       console.error("❌ Error fetching team results:", error)
@@ -119,14 +123,30 @@ export default function TeamResultsModal({
     }
   }
 
+  const calculatePrizeAmount = (rank: number, prizePool: any): number => {
+    if (!prizePool || !prizePool.distribution_config) return 0
+
+    const { distribution_type, distribution_config, prize_pool_size } = prizePool
+    const distributions = distribution_config.distributions || []
+
+    if (distribution_type === "fixed") {
+      const dist = distributions.find((d: any) => rank >= d.rankFrom && rank <= d.rankTo)
+      return dist?.amount || 0
+    } else {
+      const dist = distributions.find((d: any) => rank >= d.rankFrom && rank <= d.rankTo)
+      const percentage = dist?.percentage || 0
+      return (prize_pool_size * percentage) / 100
+    }
+  }
+
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
         return <Trophy className="w-5 h-5 text-yellow-500" />
       case 2:
-        return <Award className="w-5 h-5 text-gray-400" />
+        return <span className="w-5 h-5 text-gray-400">🥈</span>
       case 3:
-        return <Award className="w-5 h-5 text-amber-600" />
+        return <span className="w-5 h-5 text-amber-600">🥉</span>
       default:
         return <span className="w-5 h-5 text-gray-400">{rank}</span>
     }
@@ -140,6 +160,35 @@ export default function TeamResultsModal({
     }).format(amount)
   }
 
+  const copyWalletAddressesAndAmounts = async () => {
+    try {
+      // Filter only participants with wallet addresses (regardless of prize amount)
+      const validResults = teamResults.filter(result => 
+        result.wallet_address !== "Unknown"
+      )
+
+      if (validResults.length === 0) {
+        alert("No valid wallet addresses found to copy")
+        return
+      }
+
+      // Format: wallet_address,prize_amount (include 0 amounts too)
+      const copyText = validResults
+        .map(result => `${result.wallet_address},${result.prize_amount}`)
+        .join('\n')
+
+      await navigator.clipboard.writeText(copyText)
+      setCopied(true)
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => setCopied(false), 2000)
+      
+    } catch (error) {
+      console.error("❌ Error copying to clipboard:", error)
+      alert("Failed to copy to clipboard")
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
@@ -149,12 +198,31 @@ export default function TeamResultsModal({
             <h2 className="text-xl font-semibold text-gray-900">Team Results</h2>
             <p className="text-sm text-gray-600">{prizePoolName}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={copyWalletAddressesAndAmounts}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              title="Copy wallet addresses and prize amounts"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Wallet & Amounts</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -175,31 +243,6 @@ export default function TeamResultsModal({
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Pool Statistics */}
-              {poolStats && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">Pool Statistics</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-gray-600">Total Teams</div>
-                      <div className="font-semibold">{teamResults.length}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Winners</div>
-                      <div className="font-semibold">{teamResults.filter(t => t.prize_amount > 0).length}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Total Prize Pool</div>
-                      <div className="font-semibold">{formatAmount(teamResults.reduce((sum, t) => sum + t.prize_amount, 0))}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Status</div>
-                      <div className="font-semibold capitalize">{poolStats.status}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Team Results Table */}
               <div>
                 <h3 className="font-semibold text-gray-900 mb-4">Final Standings</h3>
@@ -212,11 +255,10 @@ export default function TeamResultsModal({
                         <th className="text-left p-3 border-b font-medium text-gray-700">User ID</th>
                         <th className="text-left p-3 border-b font-medium text-gray-700">Prize Amount</th>
                         <th className="text-left p-3 border-b font-medium text-gray-700">Wallet Address</th>
-                        <th className="text-left p-3 border-b font-medium text-gray-700">Tokens</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {teamResults.map((result, index) => (
+                      {teamResults.map((result) => (
                         <tr key={result.id} className="hover:bg-gray-50">
                           <td className="p-3 border-b">
                             <div className="flex items-center space-x-2">
@@ -240,22 +282,6 @@ export default function TeamResultsModal({
                               {result.wallet_address}
                             </div>
                           </td>
-                          <td className="p-3 border-b">
-                            <div className="flex flex-wrap gap-1">
-                              {result.tokens && result.tokens.length > 0 ? (
-                                result.tokens.map((token: any, tokenIndex: number) => (
-                                  <span
-                                    key={tokenIndex}
-                                    className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
-                                  >
-                                    {token.symbol || token.name || 'Unknown'}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-gray-400 text-sm">No tokens</span>
-                              )}
-                            </div>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -263,29 +289,16 @@ export default function TeamResultsModal({
                 </div>
               </div>
 
-              {/* Winners Summary */}
-              {teamResults.filter(t => t.prize_amount > 0).length > 0 && (
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-green-900 mb-2">🏆 Winners Summary</h3>
-                  <div className="space-y-2">
-                    {teamResults
-                      .filter(t => t.prize_amount > 0)
-                      .sort((a, b) => a.final_rank - b.final_rank)
-                      .map((winner) => (
-                        <div key={winner.id} className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            {getRankIcon(winner.final_rank)}
-                            <span className="font-medium">{winner.team_name}</span>
-                            <span className="text-gray-500">({winner.user_uid})</span>
-                          </div>
-                          <span className="font-semibold text-green-600">
-                            {formatAmount(winner.prize_amount)}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+              {/* Copy Instructions */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Copy Instructions</h4>
+                <p className="text-sm text-blue-800">
+                  Click the "Copy Wallet & Amounts" button to copy all wallet addresses and prize amounts 
+                  for this pool in the format: <code className="bg-blue-100 px-1 rounded">wallet_address,prize_amount</code>
+                  <br />
+                  <span className="text-blue-600">Note: Will copy all participants with valid wallet addresses, including those with $0 prize amounts.</span>
+                </p>
+              </div>
             </div>
           )}
         </div>

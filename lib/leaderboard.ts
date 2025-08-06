@@ -174,20 +174,122 @@ export async function finalizePricesAndRankings(prizePoolId: string) {
       return { success: true, message: "Final rankings already exist" }
     }
 
-    // Get leaderboard data
-    const leaderboard = await getLeaderboard(prizePoolId, false)
+    // Get all unique tokens from participating teams directly
+    const { data: participants, error: participantsError } = await supabase
+      .from("prize_pool_participants")
+      .select(`
+        team_id,
+        teams!inner(tokens)
+      `)
+      .eq("prize_pool_id", prizePoolId)
 
-    // Get all unique tokens
+    if (participantsError) {
+      console.error("❌ Error fetching participants:", participantsError)
+      throw participantsError
+    }
+
+    if (!participants || participants.length === 0) {
+      console.log("⚠️ No participants found for pool:", prizePoolId)
+      return { success: false, message: "No participants found" }
+    }
+
+    // Extract all unique token IDs
     const allTokens = new Set<string>()
-    leaderboard.forEach((team) => {
-      team.tokens.forEach((token) => {
-        allTokens.add(token.coin_id)
-      })
+    participants.forEach((participant: any) => {
+      if (participant.teams && participant.teams.tokens && Array.isArray(participant.teams.tokens)) {
+        participant.teams.tokens.forEach((token: any) => {
+          if (token && token.id) {
+            allTokens.add(token.id)
+          }
+        })
+      }
     })
 
-    // Get final prices
     const coinIds = Array.from(allTokens)
-    const finalPrices = await getCurrentPrices(coinIds)
+    console.log("🪙 Unique tokens to finalize:", coinIds.length, coinIds.slice(0, 5), "...")
+
+    if (coinIds.length === 0) {
+      console.log("⚠️ No valid tokens found to finalize prices for")
+      return { success: false, message: "No valid tokens found" }
+    }
+
+    // Get locked prices for comparison
+    const { data: lockedPrices } = await supabase
+      .from("locked_prices")
+      .select("*")
+      .eq("prize_pool_id", prizePoolId)
+
+    const lockedPriceMap = new Map(lockedPrices?.map((lp) => [lp.coin_id, lp.locked_price]) || [])
+
+    // Get final prices with retry mechanism and delay to ensure fresh prices
+    console.log("📊 Fetching final prices from CoinGecko with delay...")
+    let finalPrices: Record<string, number> = {}
+    let retryCount = 0
+    const maxRetries = 3
+    const baseDelayMs = 2000 // 2 second base delay to ensure fresh prices
+
+    while (retryCount < maxRetries) {
+      try {
+        // Add delay before fetching to ensure prices have changed
+        if (retryCount > 0) {
+          const randomDelay = baseDelayMs + Math.random() * 1000 // Add 0-1 second randomization
+          console.log(`⏳ Waiting ${Math.round(randomDelay)}ms before retry ${retryCount + 1}/${maxRetries}...`)
+          await new Promise((resolve) => setTimeout(resolve, randomDelay))
+        } else {
+          const initialDelay = baseDelayMs + Math.random() * 1000 // Add 0-1 second randomization
+          console.log(`⏳ Waiting ${Math.round(initialDelay)}ms to ensure fresh prices...`)
+          await new Promise((resolve) => setTimeout(resolve, initialDelay))
+        }
+
+        finalPrices = await getCurrentPrices(coinIds)
+        console.log("💰 Final prices fetched:", Object.keys(finalPrices).length, "prices")
+
+        // Check if prices are different from locked prices
+        let differentPrices = 0
+        let samePrices = 0
+        let totalDifference = 0
+        for (const coinId of coinIds) {
+          const lockedPrice = lockedPriceMap.get(coinId) || 0
+          const finalPrice = finalPrices[coinId] || 0
+          const difference = Math.abs(finalPrice - lockedPrice)
+          const percentageChange = lockedPrice > 0 ? (difference / lockedPrice) * 100 : 0
+
+          totalDifference += difference
+
+          if (percentageChange > 0.001) { // More than 0.001% difference (lower threshold)
+            differentPrices++
+          } else {
+            samePrices++
+          }
+        }
+
+        const averageDifference = totalDifference / coinIds.length
+        console.log(`📊 Price comparison: ${differentPrices} different, ${samePrices} same, avg diff: $${averageDifference.toFixed(4)}`)
+
+        // If we have some different prices or this is the last attempt, consider it successful
+        if (differentPrices > 0 || retryCount === maxRetries - 1) {
+          console.log("✅ Final prices fetched successfully")
+          break
+        } else {
+          console.log("⚠️ All prices are the same, retrying...")
+          retryCount++
+        }
+      } catch (error) {
+        retryCount++
+        console.error(`❌ Error fetching final prices (attempt ${retryCount}/${maxRetries}):`, error)
+        if (retryCount < maxRetries) {
+          const retryDelay = baseDelayMs + Math.random() * 1000
+          console.log(`⏳ Retrying in ${Math.round(retryDelay)}ms...`)
+          await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        } else {
+          throw new Error("Failed to fetch final prices after multiple attempts")
+        }
+      }
+    }
+
+    if (Object.keys(finalPrices).length === 0) {
+      throw new Error("No final prices were fetched from CoinGecko")
+    }
 
     // Store final prices
     const finalPricesData = coinIds.map((coinId) => ({
@@ -196,7 +298,16 @@ export async function finalizePricesAndRankings(prizePoolId: string) {
       final_price: finalPrices[coinId] || 0,
     }))
 
-    await supabase.from("final_prices").insert(finalPricesData)
+    console.log("💾 Inserting final prices:", finalPricesData.length, "records")
+    const { error: insertError } = await supabase.from("final_prices").insert(finalPricesData)
+
+    if (insertError) {
+      console.error("❌ Error inserting final prices:", insertError)
+      throw insertError
+    }
+
+    // Get leaderboard data for rankings calculation
+    const leaderboard = await getLeaderboard(prizePoolId, false)
 
     // Calculate final rankings with prize distribution
     const { data: prizePool } = await supabase
@@ -219,10 +330,15 @@ export async function finalizePricesAndRankings(prizePoolId: string) {
         is_tie: team.is_tie || false,
       }))
 
-      await supabase.from("final_rankings").insert(rankingsData)
+      const { error: rankingsError } = await supabase.from("final_rankings").insert(rankingsData)
+      if (rankingsError) {
+        console.error("❌ Error inserting final rankings:", rankingsError)
+        throw rankingsError
+      }
     }
 
     console.log("✅ Successfully finalized prices and rankings for pool:", prizePoolId)
+    return { success: true, message: "Prices and rankings finalized successfully" }
   } catch (error) {
     console.error("💥 Error finalizing prices and rankings:", error)
     throw error
